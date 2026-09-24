@@ -10,6 +10,10 @@ Sometimes you just want a photo to stay on screen for five minutes. This project
 
 Choose some photos, set the pace, and let them play. No account, cloud album, subscription, or build step.
 
+What started as a five-minute slideshow interval somehow turned into local HTTP serving, Safari debugging, and an open-source project.
+
+Thanks, Apple.
+
 ## Features
 
 - **Custom timing:** 30 seconds, 1 minute, 5 minutes, 10 minutes, or a custom interval from 1 to 86,400 seconds.
