@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>相框</title>
+  <style>
+    :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #050505; }
+    button, select, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    #frame { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; background: #050505; touch-action: manipulation; }
+    #photo { display: block; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity .24s ease; user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
+    #photo.ready { opacity: 1; }
+    #photo.fill { object-fit: cover; }
+    #empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 30px; background: radial-gradient(circle at 50% 42%, #202020 0, #0b0b0b 45%, #050505 75%); }
+    #empty.hidden { display: none; }
+    .welcome { width: min(100%, 440px); text-align: center; }
+    .mark { width: 76px; height: 76px; display: grid; place-items: center; margin: 0 auto 28px; border: 1px solid #ffffff35; border-radius: 22px; background: #ffffff0c; font-size: 36px; }
+    h1 { margin: 0 0 12px; font-size: clamp(32px, 5vw, 46px); font-weight: 600; letter-spacing: -.04em; }
+    .welcome p { margin: 0 auto 30px; color: #b4b4b4; font-size: 16px; line-height: 1.6; }
+    .choose { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 28px; border-radius: 16px; background: #f2f2f2; color: #111; font-size: 16px; font-weight: 650; cursor: pointer; }
+    .choose:active { background: #cfcfcf; }
+    .privacy { display: block; margin-top: 20px; color: #858585; font-size: 13px; }
+    #controls { position: absolute; inset: 0; pointer-events: none; opacity: 1; transition: opacity .28s ease; }
+    #frame.controls-hidden #controls { opacity: 0; visibility: hidden; transition: opacity .28s ease, visibility 0s .28s; }
+    #controls > * { pointer-events: auto; }
+    .topbar { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: max(18px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 28px max(20px, env(safe-area-inset-left)); background: linear-gradient(#000b, #0000); }
+    .title { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #fff; font-size: 15px; font-weight: 600; text-shadow: 0 1px 5px #000; }
+    .count { flex: none; color: #dedede; font-size: 14px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 5px #000; }
+    .bottom { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 56px max(16px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); background: linear-gradient(#0000, #000d); }
+    .transport, .settings { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; }
+    .transport { gap: 16px; }
+    .icon-btn, .pill, .field { border: 1px solid #ffffff3b; color: #fff; background: #202020ca; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+    .icon-btn { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; font-size: 25px; line-height: 1; cursor: pointer; }
+    .icon-btn.primary { width: 62px; height: 62px; color: #111; background: #f3f3f3; border-color: #f3f3f3; font-size: 27px; }
+    .icon-btn:active, .pill:active { transform: scale(.96); }
+    .pill { min-height: 40px; padding: 0 14px; border-radius: 12px; font-size: 14px; cursor: pointer; }
+    .pill.active { background: #f3f3f3; border-color: #f3f3f3; color: #111; }
+    .pill.label { display: inline-flex; align-items: center; }
+    .field { height: 40px; border-radius: 12px; padding: 0 10px; font-size: 14px; }
+    select.field { max-width: 112px; }
+    input.field { width: 82px; text-align: center; }
+    input.field[hidden] { display: none; }
+    #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    #toast { position: absolute; left: 50%; top: max(78px, calc(env(safe-area-inset-top) + 55px)); transform: translateX(-50%); max-width: min(90vw, 450px); padding: 11px 15px; border-radius: 12px; background: #202020e8; color: #fff; font-size: 14px; text-align: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
+    #toast.show { opacity: 1; }
+    :focus-visible { outline: 3px solid #80b7ff; outline-offset: 3px; }
+    @media (max-width: 590px) { .bottom { gap: 12px; } .settings { gap: 6px; } .pill { padding: 0 10px; } }
+    @media (prefers-reduced-motion: reduce) { #photo, #controls, #toast { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main id="frame" aria-label="照片电子相框">
+    <img id="photo" alt="当前照片" draggable="false">
+    <div id="empty">
+      <div class="welcome">
+        <div class="mark" aria-hidden="true">▣</div>
+        <h1>你的照片，慢慢看。</h1>
+        <p>选几张照片，放下 iPad，安静地循环播放。</p>
+        <label class="choose" for="fileInput">选择照片</label>
+        <span class="privacy">照片只留在这台设备里；关掉页面后需重新选择。</span>
+      </div>
+    </div>
+    <div id="controls" hidden>
+      <div class="topbar">
+        <span class="title" id="photoName"></span>
+        <span class="count" id="counter"></span>
+      </div>
+      <div class="bottom">
+        <div class="transport" aria-label="播放控制">
+          <button class="icon-btn" id="previous" type="button" aria-label="上一张" title="上一张">‹</button>
+          <button class="icon-btn primary" id="playPause" type="button" aria-label="暂停" title="暂停">Ⅱ</button>
+          <button class="icon-btn" id="next" type="button" aria-label="下一张" title="下一张">›</button>
+        </div>
+        <div class="settings" aria-label="播放设置">
+          <select class="field" id="interval" aria-label="切换间隔">
+            <option value="30">30 秒</option>
+            <option value="60">1 分钟</option>
+            <option value="300">5 分钟</option>
+            <option value="600">10 分钟</option>
+            <option value="custom">自定义</option>
+          </select>
+          <input class="field" id="customSeconds" type="number" min="1" max="86400" step="1" value="45" inputmode="numeric" aria-label="自定义秒数" hidden>
+          <button class="pill" id="order" type="button" aria-label="切换为随机播放">顺序</button>
+          <button class="pill" id="fit" type="button" aria-label="切换为填满屏幕">适应</button>
+          <button class="pill" id="fullscreen" type="button" aria-label="进入全屏">全屏</button>
+          <label class="pill label" for="fileInput">换照片</label>
+        </div>
+      </div>
+    </div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <input id="fileInput" type="file" accept="image/*" multiple aria-label="选择多张照片">
+  </main>
+  <script>
+    (() => {
+      'use strict';
+      const $ = id => document.getElementById(id);
+      const frame = $('frame'), photo = $('photo'), empty = $('empty'), controls = $('controls');
+      const fileInput = $('fileInput'), photoName = $('photoName'), counter = $('counter');
+      const intervalSelect = $('interval'), customSeconds = $('customSeconds');
+      const playPauseButton = $('playPause'), orderButton = $('order'), fitButton = $('fit');
+      const fullscreenButton = $('fullscreen'), toast = $('toast');
+      let photos = [], current = 0, playing = true, random = false, fill = false;
+      let seconds = 30, slideTimer = 0, hideTimer = 0, toastTimer = 0;
+      let bag = [], history = [], historyPosition = 0;
+
+      function announce(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+      }
+
+      function showControls() {
+        frame.classList.remove('controls-hidden');
+        clearTimeout(hideTimer);
+        if (playing && photos.length) hideTimer = setTimeout(() => frame.classList.add('controls-hidden'), 3500);
+      }
+
+      function scheduleSlide() {
+        clearTimeout(slideTimer);
+        if (playing && photos.length > 1 && !document.hidden) {
+          slideTimer = setTimeout(() => move(1, false), seconds * 1000);
+        }
+      }
+
+      function shuffle(values) {
+        for (let i = values.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [values[i], values[j]] = [values[j], values[i]];
+        }
+        return values;
+      }
+
+      function resetRandom() {
+        history = [current];
+        historyPosition = 0;
+        bag = shuffle(photos.map((_, index) => index).filter(index => index !== current));
+      }
+
+      function nextRandom() {
+        if (historyPosition < history.length - 1) {
+          current = history[++historyPosition];
+          return;
+        }
+        if (!bag.length) bag = shuffle(photos.map((_, index) => index).filter(index => index !== current));
+        current = bag.pop();
+        history.push(current);
+        historyPosition = history.length - 1;
+      }
+
+      function previousRandom() {
+        if (historyPosition > 0) {
+          current = history[--historyPosition];
+          return;
+        }
+        if (!bag.length) bag = shuffle(photos.map((_, index) => index).filter(index => index !== current));
+        current = bag.pop();
+        history.unshift(current);
+      }
+
+      function renderPhoto() {
+        if (!photos.length) return;
+        photo.classList.remove('ready');
+        photo.alt = photos[current].name || '当前照片';
+        photo.src = photos[current].url;
+        photoName.textContent = photos[current].name;
+        counter.textContent = `${current + 1} / ${photos.length}`;
+        scheduleSlide();
+      }
+
+      function move(direction, revealControls = true) {
+        if (photos.length < 2) return;
+        if (random) {
+          direction > 0 ? nextRandom() : previousRandom();
+        } else {
+          current = (current + direction + photos.length) % photos.length;
+        }
+        renderPhoto();
+        if (revealControls) showControls();
+      }
+
+      function updatePlayButton() {
+        playPauseButton.textContent = playing ? 'Ⅱ' : '▶';
+        playPauseButton.setAttribute('aria-label', playing ? '暂停' : '播放');
+        playPauseButton.title = playing ? '暂停' : '播放';
+      }
+
+      function changePhotos(files) {
+        const images = files.filter(file => file.type.startsWith('image/') || (!file.type && /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp|tiff?)$/i.test(file.name)));
+        if (!images.length) { announce('请选择照片文件'); return; }
+        clearTimeout(slideTimer);
+        photo.removeAttribute('src');
+        photos.forEach(item => URL.revokeObjectURL(item.url));
+        photos = images.map(file => ({ name: file.name, url: URL.createObjectURL(file) }));
+        current = 0;
+        playing = true;
+        updatePlayButton();
+        resetRandom();
+        empty.classList.add('hidden');
+        controls.hidden = false;
+        renderPhoto();
+        showControls();
+      }
+
+      fileInput.addEventListener('change', () => {
+        const selected = Array.from(fileInput.files || []);
+        fileInput.value = '';
+        if (selected.length) changePhotos(selected);
+      });
+      photo.addEventListener('load', () => photo.classList.add('ready'));
+      photo.addEventListener('error', () => {
+        photo.classList.remove('ready');
+        clearTimeout(slideTimer);
+        announce('这张照片无法显示，请换一张');
+        showControls();
+      });
+      $('previous').addEventListener('click', () => move(-1));
+      $('next').addEventListener('click', () => move(1));
+      playPauseButton.addEventListener('click', () => {
+        playing = !playing;
+        updatePlayButton();
+        scheduleSlide();
+        showControls();
+      });
+      intervalSelect.addEventListener('change', () => {
+        const custom = intervalSelect.value === 'custom';
+        customSeconds.hidden = !custom;
+        seconds = custom ? Number(customSeconds.value) || 45 : Number(intervalSelect.value);
+        scheduleSlide();
+        showControls();
+      });
+      customSeconds.addEventListener('change', () => {
+        const value = Math.floor(Number(customSeconds.value));
+        if (!Number.isFinite(value) || value < 1 || value > 86400) {
+          customSeconds.value = String(seconds);
+          announce('请输入 1～86400 秒');
+          return;
+        }
+        seconds = value;
+        customSeconds.value = String(value);
+        scheduleSlide();
+        showControls();
+      });
+      orderButton.addEventListener('click', () => {
+        random = !random;
+        if (random) resetRandom();
+        orderButton.textContent = random ? '随机' : '顺序';
+        orderButton.classList.toggle('active', random);
+        orderButton.setAttribute('aria-label', random ? '切换为顺序播放' : '切换为随机播放');
+        scheduleSlide();
+        showControls();
+      });
+      fitButton.addEventListener('click', () => {
+        fill = !fill;
+        photo.classList.toggle('fill', fill);
+        fitButton.textContent = fill ? '填满' : '适应';
+        fitButton.classList.toggle('active', fill);
+        fitButton.setAttribute('aria-label', fill ? '切换为适应屏幕' : '切换为填满屏幕');
+        showControls();
+      });
+      function updateFullscreenButton() {
+        const active = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+        fullscreenButton.textContent = active ? '退出全屏' : '全屏';
+        fullscreenButton.setAttribute('aria-label', active ? '退出全屏' : '进入全屏');
+      }
+      fullscreenButton.addEventListener('click', async () => {
+        try {
+          if (document.fullscreenElement || document.webkitFullscreenElement) {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit) await exit.call(document);
+          } else {
+            const request = frame.requestFullscreen || frame.webkitRequestFullscreen;
+            if (!request) throw new Error('unsupported');
+            await request.call(frame);
+          }
+        } catch (_) {
+          announce('Safari 未能进入全屏；照片仍会铺满网页区域');
+        }
+        updateFullscreenButton();
+        showControls();
+      });
+      document.addEventListener('fullscreenchange', updateFullscreenButton);
+      document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+      frame.addEventListener('click', event => {
+        if (!photos.length || event.target.closest('#controls, #empty, #toast')) return;
+        if (frame.classList.contains('controls-hidden')) showControls();
+        else { clearTimeout(hideTimer); frame.classList.add('controls-hidden'); }
+      });
+      controls.addEventListener('click', event => event.stopPropagation());
+      controls.addEventListener('focusin', () => clearTimeout(hideTimer));
+      controls.addEventListener('focusout', () => setTimeout(() => {
+        if (!controls.contains(document.activeElement)) showControls();
+      }, 0));
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearTimeout(slideTimer);
+        else scheduleSlide();
+      });
+      window.addEventListener('pagehide', () => {
+        clearTimeout(slideTimer);
+        photos.forEach(item => URL.revokeObjectURL(item.url));
+      });
+    })();
+  </script>
+</body>
+</html>

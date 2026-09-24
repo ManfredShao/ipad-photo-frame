@@ -1,0 +1,20 @@
+# Operating system and editor files
+.DS_Store
+._*
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local scratch files and logs
+work/
+tmp/
+*.log
+__pycache__/
+.env
+.env.*
+
+# Keep personal photo collections out of the repository
+photos/
+private-photos/
